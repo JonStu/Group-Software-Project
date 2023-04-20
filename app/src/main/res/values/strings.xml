@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Bloom-Final</string>
+    <string name="title_garden">Garden</string>
+    <string name="title_camera">Camera</string>
+    <string name="title_calander">Calander</string>
+    <string name="take_photo">Take Photo</string>
+    <string name="start_capture">Start Capture</string>
+    <string name="stop_capture">Stop Capture</string>
+</resources>
