@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/navigation_garden"
+        android:icon="@android:drawable/ic_menu_gallery"
+        android:title="@string/title_garden" />
+
+    <item
+        android:id="@+id/navigation_camera"
+        android:icon="@android:drawable/ic_menu_camera"
+        android:title="@string/title_camera" />
+
+    <item
+        android:id="@+id/navigation_calander"
+        android:icon="@android:drawable/ic_menu_today"
+        android:title="@string/title_calander" />
+
+</menu>

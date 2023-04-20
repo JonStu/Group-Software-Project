@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/mobile_navigation"
+    app:startDestination="@+id/navigation_garden">
+
+    <fragment
+        android:id="@+id/navigation_garden"
+        android:name="com.example.bloom_final.ui.garden.GardenFragment"
+        android:label="@string/title_garden"
+        tools:layout="@layout/fragment_garden" />
+
+    <fragment
+        android:id="@+id/navigation_camera"
+        android:name="com.example.bloom_final.ui.camera.CameraFragment"
+        android:label="@string/title_camera"
+        tools:layout="@layout/fragment_camera" />
+
+    <fragment
+        android:id="@+id/navigation_calander"
+        android:name="com.example.bloom_final.ui.calander.CalanderFragment"
+        android:label="@string/title_calander"
+        tools:layout="@layout/fragment_calander" />
+</navigation>
