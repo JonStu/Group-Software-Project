@@ -3,15 +3,16 @@ package com.example.bloom_final.ui.camera
 
 import android.Manifest
 import android.app.Activity
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Base64
 import android.util.Log
 import android.view.*
 import android.widget.Toast
@@ -21,13 +22,15 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import com.example.bloom_final.R
 import com.example.bloom_final.databinding.FragmentCameraBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okio.IOException
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -36,10 +39,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-
+import java.net.HttpURLConnection;
+import java.net.URL;
 class CameraFragment : Fragment() {
 
-    private lateinit var safeContext: Context
     private lateinit var outputDirectory: File
 
     private val client = OkHttpClient()
@@ -83,14 +86,18 @@ class CameraFragment : Fragment() {
     }
 
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
+        // Check if we have permissions
+        Manifest.permission.READ_EXTERNAL_STORAGE
         ContextCompat.checkSelfPermission(
             requireContext(), it
         ) == PackageManager.PERMISSION_GRANTED
     }
-
     private fun openGallery() {
-        val intent = Intent(Intent.ACTION_PICK)
-        intent.type = "image/*"
+        // Use ACTION_OPEN_DOCUMENT instead of ACTION_PICK for Android 11+
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+        }
         startActivityForResult(intent, REQUEST_CODE_GALLERY)
     }
 
@@ -100,8 +107,14 @@ class CameraFragment : Fragment() {
         if (requestCode == REQUEST_CODE_GALLERY && resultCode == Activity.RESULT_OK) {
             val imageUri: Uri? = data?.data
             if (imageUri != null) {
-                val bitmap = MediaStore.Images.Media.getBitmap(requireContext().contentResolver, imageUri)
-                sendImageToPlantID(bitmap)
+                // For Android 11+, use takePersistableUriPermission to grant permission to access the URI
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    requireActivity().contentResolver.takePersistableUriPermission(
+                        imageUri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
+                }
+                sendImageToPlantID(imageUri)
             }
         }
     }
@@ -150,92 +163,112 @@ class CameraFragment : Fragment() {
     }
 
     private fun takePhoto() {
-        // Get a reference to the image capture use case
+        // Get a stable reference of the modifiable image capture use case
         val imageCapture = imageCapture ?: return
 
-        // Create timestamped output file to hold the captured image
-        val photoFile = File(
-            outputDirectory,
-            SimpleDateFormat(FILENAME_FORMAT, Locale.US)
-                .format(System.currentTimeMillis()) + ".jpg")
-
-        // Set up options object to configure the capture session
-        val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
-
-        // Set up a listener for when image capture is complete
-        imageCapture.takePicture(outputOptions, ContextCompat.getMainExecutor(requireContext()), object : ImageCapture.OnImageSavedCallback {
-            override fun onError(exc: ImageCaptureException) {
-                Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
-                Toast.makeText(requireContext(), "Photo capture failed", Toast.LENGTH_SHORT).show()
+        // Create time stamped name and MediaStore entry.
+        val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US)
+            .format(System.currentTimeMillis())
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+            if(Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-Image")
             }
+        }
 
-            override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                val savedUri = Uri.fromFile(photoFile)
-                Log.d(TAG, "Photo capture succeeded: $savedUri")
-                Toast.makeText(requireContext(), "Photo capture succeeded", Toast.LENGTH_SHORT).show()
-
-                // Load the captured image into the image view
-                binding.previewImage.setImageURI(savedUri)
-
-                // Upload the image to Plant.ID API
-                val bitmap = BitmapFactory.decodeFile(photoFile.absolutePath)
-                sendImageToPlantID(bitmap)
-            }
-        })
-    }
-    private fun sendImageToPlantID(bitmap: Bitmap) {
-        val byteArrayOutputStream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream)
-        val requestBody = byteArrayOutputStream.toByteArray().toRequestBody("image/jpeg".toMediaTypeOrNull())
-
-        val request = Request.Builder()
-            .url("https://api.plant.id/v2/identify")
-            .post(requestBody)
-            .header("Content-Type", "application/json")
-            .header("Api-Key", apiKey)
+        // Create output options object which contains file + metadata
+        val outputOptions = ImageCapture.OutputFileOptions
+            .Builder(
+                requireContext().contentResolver,
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                contentValues)
             .build()
 
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                Log.e(TAG, "Error sending image to Plant.ID API", e)
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                val responseBody = response.body?.string()
-                var plantName = ""
-                var confidence = ""
-
-                try {
-                    val jsonObject = JSONObject(responseBody!!)
-                    val suggestionsArray = jsonObject.getJSONArray("suggestions")
-
-                    if (suggestionsArray.length() > 0) {
-                        val firstSuggestion = suggestionsArray.getJSONObject(0)
-                        plantName = firstSuggestion.getString("plant_name")
-                        confidence = String.format(
-                            "%.2f",
-                            firstSuggestion.getDouble("probability") * 100
-                        ) + "%"
-                    } else {
-                        plantName = "Unknown Plant"
-                        confidence = "0.00%"
-                    }
-                } catch (e: JSONException) {
-                    Log.e(TAG, "Error parsing JSON response from Plant.ID API", e)
+        // Set up image capture listener, which is triggered after photo has
+        // been taken
+        imageCapture.takePicture(
+            outputOptions,
+            ContextCompat.getMainExecutor(requireContext()),
+            object : ImageCapture.OnImageSavedCallback {
+                override fun onError(exc: ImageCaptureException) {
+                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
                 }
 
-                requireActivity().runOnUiThread {
-                    if (isAdded) { // Check the fragment is added before updating UI
-                        binding.apply {
-                            plantNameTextView.text = plantName
-                            confidenceTextView.text = confidence
-                            resultLayout.visibility = View.VISIBLE
-                        }
-                    }
+                override fun
+                        onImageSaved(output: ImageCapture.OutputFileResults){
+                    val msg = "Photo capture succeeded: ${output.savedUri}"
+                    Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+                    Log.d(TAG, msg)
+
+                    val imageUri = output.savedUri ?: return
+                    sendImageToPlantID(imageUri)
                 }
             }
-        })
+        )
     }
+    private fun sendImageToPlantID(imageUri: Uri) {
+
+        GlobalScope.launch(Dispatchers.IO) {
+
+            try {
+
+                // Get the bitmap from the URI
+                val bitmap = MediaStore.Images.Media.getBitmap(requireContext().contentResolver, imageUri)
+
+                // Convert bitmap to base64 string
+                val baos = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos)
+                val byteArray = baos.toByteArray()
+                val encodedImage = Base64.encodeToString(byteArray, Base64.NO_WRAP)
+
+                // Set up request body
+                val jsonObject = JSONObject()
+                val jsonArray = JSONArray()
+                jsonArray.put(encodedImage)
+                jsonObject.put("images", jsonArray)
+                jsonObject.put("organs", "leaf")
+                val requestBody = jsonObject.toString().toRequestBody("application/json".toMediaTypeOrNull())
+
+                // Set up request
+                val request = Request.Builder()
+                    .url("https://api.plant.id/v2/identify")
+                    .addHeader("Api-Key", apiKey)
+                    .post(requestBody)
+                    .build()
+
+                // Send request and get response
+                val response = client.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    throw IOException("Unexpected code $response")
+                }
+
+                // Parse response and display result
+                val responseString = response.body?.string()
+                val jsonArrayResult = JSONObject(responseString).getJSONArray("suggestions")
+
+                if (jsonArrayResult.length() > 0) {
+                    val plantName = jsonArrayResult.getJSONObject(0).getString("plant_name")
+                    val probability = jsonArrayResult.getJSONObject(0).getString("probability")
+
+                    GlobalScope.launch(Dispatchers.Main) {
+                        Toast.makeText(requireContext(), "Plant Name: $plantName\nProbability: $probability", Toast.LENGTH_LONG).show()
+                    }
+                } else {
+                    GlobalScope.launch(Dispatchers.Main) {
+                        Toast.makeText(requireContext(), "Could not identify plant", Toast.LENGTH_LONG).show()
+                    }
+                }
+
+            } catch (e: JSONException) {
+                e.printStackTrace()
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+        }
+    }
+
 
 
     override fun onDestroyView() {
