@@ -22,6 +22,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.setFragmentResultListener
 import com.example.bloom_final.databinding.FragmentCameraBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -43,8 +44,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 class CameraFragment : Fragment() {
 
-    private lateinit var outputDirectory: File
-
     private val client = OkHttpClient()
     private var apiKey = "gPw5U4bffeCEGa7RZ5fLBrFDKg6Hkpdp1q0XidgGwEPl1yKKdV"
 
@@ -53,6 +52,8 @@ class CameraFragment : Fragment() {
 
     private lateinit var cameraExecutor: ExecutorService
     private val binding get() = _binding!!
+
+    val plantName = "";
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -253,6 +254,8 @@ class CameraFragment : Fragment() {
                     val probability = jsonArrayResult.getJSONObject(0).getString("probability")
 
                     GlobalScope.launch(Dispatchers.Main) {
+                        val resultBundle = createResultBundle(plantName, probability)
+                        parentFragmentManager.setFragmentResult("plantIdentification", resultBundle)
                         Toast.makeText(requireContext(), "Plant Name: $plantName\nProbability: $probability", Toast.LENGTH_LONG).show()
                     }
                 } else {
@@ -267,6 +270,13 @@ class CameraFragment : Fragment() {
                 e.printStackTrace()
             }
         }
+    }
+
+    private fun createResultBundle(plantName: String?, probability: String?): Bundle {
+        val resultBundle = Bundle()
+        resultBundle.putString("plant_name", plantName)
+        resultBundle.putString("probability", probability)
+        return resultBundle
     }
 
 
