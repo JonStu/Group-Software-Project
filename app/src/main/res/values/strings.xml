@@ -5,5 +5,16 @@
     <string name="title_calander">Calander</string>
     <string name="take_photo">Take Photo</string>
     <string name="upload_photo">Upload Photo</string>
+    <string name="select_frequency">Select Frequency</string>
+
+    <string-array name="frequency_options">
+        <item>Every day</item>
+        <item>Every 2 days</item>
+        <item>Every 3 days</item>
+        <item>Every week</item>
+        <item>Every 2 weeks</item>
+        <item>Every month</item>
+    </string-array>
 
 </resources>
+
