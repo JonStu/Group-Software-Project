@@ -255,6 +255,9 @@ class CameraFragment : Fragment() {
 
                     GlobalScope.launch(Dispatchers.Main) {
                         val resultBundle = createResultBundle(plantName, probability)
+                        val bundle = Bundle()
+                        bundle.putString("image_uri", imageUri.toString())
+                        resultBundle.putAll(bundle)
                         parentFragmentManager.setFragmentResult("plantIdentification", resultBundle)
                         Toast.makeText(requireContext(), "Plant Name: $plantName\nProbability: $probability", Toast.LENGTH_LONG).show()
                     }
@@ -278,8 +281,6 @@ class CameraFragment : Fragment() {
         resultBundle.putString("probability", probability)
         return resultBundle
     }
-
-
 
     override fun onDestroyView() {
         super.onDestroyView()

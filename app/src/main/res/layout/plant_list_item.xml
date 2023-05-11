@@ -29,17 +29,18 @@
             android:id="@+id/feedDateText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="16sp"
+            android:layout_marginTop="8dp"
             android:textColor="@color/dark_gray"
-            android:layout_marginTop="8dp"/>
+            android:textSize="16sp" />
 
-        <TextView
-            android:id="@+id/frequencyText"
+        <Spinner
+            android:id="@+id/frequency_spinner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="16sp"
-            android:textColor="@color/dark_gray"
-            android:layout_marginTop="8dp"/>
+            android:layout_marginTop="16dp"
+            android:entries="@array/frequency_options"
+            android:minHeight="48dp"
+            android:prompt="@string/select_frequency" />
 
         <TextView
             android:id="@+id/probabilityText"
